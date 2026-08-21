@@ -1,0 +1,19 @@
+#compdef server
+# zsh completion for the `server` CLI.
+# Host aliases are completed live from ~/.ssh/config.
+
+_server() {
+  local -a cmds hosts
+  cmds=(list info rm edit help version pick)
+  hosts=("${(@f)$(awk '/^[[:space:]]*Host[[:space:]]/ { for (i=2; i<=NF; i++) if ($i !~ /^[!*]/) print $i }' "${SERVER_SSH_CONFIG:-$HOME/.ssh/config}" 2>/dev/null)}")
+  hosts=("${(@)hosts:#}")  # drop empty entry from empty cmd-subst
+
+  if (( CURRENT == 2 )); then
+    _describe 'command' cmds
+    _describe 'server' hosts
+  elif (( CURRENT == 3 )); then
+    _describe 'server' hosts
+  fi
+}
+
+compdef _server server
