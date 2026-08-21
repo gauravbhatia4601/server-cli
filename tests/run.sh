@@ -77,16 +77,38 @@ run_in() {
   fi
 }
 
+# assert_eq <name> <actual> <expected>
+assert_eq() {
+  local name="$1" actual="$2" expected="$3"
+  if [[ "$actual" == "$expected" ]]; then
+    echo "PASS: $name"
+    pass=$((pass + 1))
+  else
+    echo "FAIL: $name (got '$actual', want '$expected')"
+    fail=$((fail + 1))
+  fi
+}
+
 # ── connect ────────────────────────────────────────────────────────
 
 run 'exact connect' 0 "$SERVER" Beta-Two
-run 'ssh received exact host' 0 grep -qx 'Beta-Two' "$LOG"
+assert_eq 'ssh received exactly the host' "$(cat "$LOG")" 'Beta-Two'
 
 run 'fuzzy single match' 0 "$SERVER" beta
-run 'ssh received fuzzy host' 0 grep -qx 'Beta-Two' "$LOG"
+assert_eq 'ssh received fuzzy host' "$(cat "$LOG")" 'Beta-Two'
 
 run_in 'picker: multiple matches, choose 2nd' 0 '2' "$SERVER" alpha
-run 'ssh received picked host' 0 grep -qx 'Alpha-Two' "$LOG"
+assert_eq 'ssh received picked host' "$(cat "$LOG")" 'Alpha-Two'
+
+# Regression: ALL interactive UI goes to stderr; stdout must stay empty
+# for connect paths, and ssh must receive a clean single host.
+printf '%s\n' '1' | "$SERVER" alpha > "$WORK/pick.out" 2> "$WORK/pick.err"
+run 'picker stdout stays empty' 0 sh -c "test ! -s '$WORK/pick.out'"
+run 'status line on stderr, exactly once' 0 sh -c "test \$(grep -cxF 'Connecting to Alpha-One ...' '$WORK/pick.err') -eq 1"
+run 'menu shown on stderr' 0 grep -q '\[ 2\] Alpha-Two' "$WORK/pick.err"
+
+"$SERVER" Beta-Two > "$WORK/direct.out" 2> /dev/null
+run 'direct-connect stdout stays empty' 0 sh -c "test ! -s '$WORK/direct.out'"
 
 run_in 'picker: abort with q' 1 'q' "$SERVER"
 run_in 'picker: invalid choice' 1 '99' "$SERVER"

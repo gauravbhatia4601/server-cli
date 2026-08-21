@@ -126,20 +126,22 @@ find_matches() {
   set +f
 }
 
-# Interactive numbered picker; prints the chosen host on stdout.
+# Interactive numbered picker; prints ONLY the chosen host on stdout.
+# The menu itself goes to stderr so stdout stays machine-readable
+# (pick is called via command substitution).
 # Returns 1 on abort/invalid input.
 pick() {
   local -a options=("$@")
   local n="${#options[@]}" i choice
   for ((i = 0; i < n; i++)); do
-    printf '  [%2d] %s\n' "$((i + 1))" "${options[i]}"
+    printf '  [%2d] %s\n' "$((i + 1))" "${options[i]}" >&2
   done
   if ! read -r -p "Pick a server (1-${n}) or [q]uit: " choice; then
     echo
     return 1
   fi
   case "$choice" in
-    '' | q | Q) echo 'Aborted.'; return 1 ;;
+    '' | q | Q) echo 'Aborted.' >&2; return 1 ;;
   esac
   if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= n)); then
     echo "${options[choice - 1]}"
@@ -171,15 +173,15 @@ cmd_connect() {
       ;;
     *)
       if [[ -z "$pattern" ]]; then
-        echo 'Available servers:'
+        echo 'Available servers:' >&2
       else
-        echo "Multiple matches for '$pattern':"
+        echo "Multiple matches for '$pattern':" >&2
       fi
       picked="$(pick "${MATCHES[@]}")" || return 1
       target="$picked"
       ;;
   esac
-  printf 'Connecting to %s ...\n' "${C_GREEN}${target}${C_RESET}"
+  printf 'Connecting to %s ...\n' "${C_GREEN}${target}${C_RESET}" >&2
   exec "$SSH_BIN" "$target"
 }
 
