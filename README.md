@@ -28,7 +28,7 @@ server list         list all aliases
 server info <name>  show HostName / User / Port / keys for one server
 server add          add a new server (guided, validates + previews)
 server rm <name>    remove a server (preview + confirm + backup)
-server edit [name]  open ~/.ssh/config in $EDITOR (optionally at <name>)
+server edit [name]  open ~/.ssh/config in $EDITOR (default: nano), optionally at <name>
 server help         help
 server version      version
 ```

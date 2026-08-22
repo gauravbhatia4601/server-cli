@@ -328,12 +328,12 @@ cmd_add() {
 
 cmd_edit() {
   local target="${1:-}" editor_str line
-  editor_str="${VISUAL:-${EDITOR:-vi}}"
+  editor_str="${VISUAL:-${EDITOR:-nano}}"
   local -a ed
   set -f
   ed=($editor_str)
   set +f
-  ((${#ed[@]} > 0)) || ed=(vi)
+  ((${#ed[@]} > 0)) || ed=(nano)
 
   if [[ -n "$target" ]]; then
     load_hosts
@@ -367,7 +367,7 @@ USAGE
   server info <name>  show one server's details
   server add          add a new server (guided)
   server rm <name>    remove a server (asks first, keeps a backup)
-  server edit [name]  open ~/.ssh/config in $EDITOR, optionally at <name>
+  server edit [name]  open ~/.ssh/config in $EDITOR (default: nano), optionally at <name>
   server help         show this help
   server version      show version
 

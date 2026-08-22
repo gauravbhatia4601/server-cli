@@ -150,6 +150,16 @@ assert_eq 'edit jumps to host line' "$(cat "$WORK/edit-args.log")" "$want"
 
 run 'edit unknown exits 1' 1 env EDITOR=/bin/echo "$SERVER" edit nope
 
+# Default editor is nano (no EDITOR/VISUAL set).
+cat > "$WORK/bin/nano" <<EOF
+#!/bin/sh
+echo "\$@" > "$WORK/nano-args.log"
+EOF
+chmod +x "$WORK/bin/nano"
+
+run 'edit defaults to nano' 0 env -u EDITOR -u VISUAL PATH="$WORK/bin:$PATH" "$SERVER" edit
+assert_eq 'nano received config path' "$(cat "$WORK/nano-args.log")" "$CONFIG"
+
 # ── rm ─────────────────────────────────────────────────────────────
 
 run_in 'rm confirm' 0 'y' "$SERVER" rm Beta-Two
