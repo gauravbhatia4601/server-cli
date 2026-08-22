@@ -336,10 +336,37 @@ run 'ungroup' 0 "$SERVER" ungroup Delta-Four
 run 'ungroup removed comment' 1 grep -q '^# @group: staging$' "$CONFIG"
 run 'ungroup requires args' 2 "$SERVER" ungroup
 
-run 'tag requires args' 2 "$SERVER" tag
+run_in 'tag no args aborts on EOF' 1 '' "$SERVER" tag
 run 'untag requires args' 2 "$SERVER" untag
-run 'group requires args' 2 "$SERVER" group
+run_in 'group no args aborts on EOF' 1 '' "$SERVER" group
 run 'tag unknown host exits 1' 1 "$SERVER" tag nope foo
+
+# ── interactive tag/group flows ─────────────────────────────────────
+
+ICFG="$WORK/interactive-cfg"
+cat > "$ICFG" <<'EOF'
+Host One
+  HostName 1.1.1.1
+Host Two
+  HostName 2.2.2.2
+EOF
+
+# no groups yet → "New name:" → type prod → pick host 2
+run_in 'interactive group: create + assign' 0 $'prod\n2' env SERVER_SSH_CONFIG="$ICFG" "$SERVER" group
+run 'interactive group wrote comment' 0 grep -q '^# @group: prod$' "$ICFG"
+run 'interactive group assigned to host 2' 0 sh -c "grep -A1 '^# @group: prod$' '$ICFG' | grep -q 'Host Two'"
+
+# groups exist now → pick existing (1) → pick host 1
+run_in 'interactive group: pick existing' 0 $'1\n1' env SERVER_SSH_CONFIG="$ICFG" "$SERVER" group
+run 'interactive group assigned to host 1' 0 sh -c "grep -A1 '^# @group: prod$' '$ICFG' | grep -q 'Host One'"
+
+# interactive tag: no tags yet → type web → pick host 1
+run_in 'interactive tag: create + assign' 0 $'web\n1' env SERVER_SSH_CONFIG="$ICFG" "$SERVER" tag
+run 'interactive tag wrote comment' 0 grep -q '^# @tags: web$' "$ICFG"
+
+# abort on empty input / invalid choice
+run_in 'interactive group abort' 1 '' env SERVER_SSH_CONFIG="$ICFG" "$SERVER" group
+run_in 'interactive invalid choice' 1 $'99' env SERVER_SSH_CONFIG="$ICFG" "$SERVER" group
 
 # ── summary ────────────────────────────────────────────────────────
 

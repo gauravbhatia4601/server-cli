@@ -32,10 +32,14 @@ server @<tag>       list hosts with a tag
 server @group:<g>   list hosts in a group
 server tags         list all tags
 server groups       list all groups
-server tag <h> <t>  add a tag to a host
+server tag           interactive: pick/create a tag, then pick a host
+server tag <tag>     list hosts with a tag
+server tag <h> <t>   add a tag to a host
 server untag <h> <t> remove a tag from a host
+server group         interactive: pick/create a group, then pick a host
+server group <name>  list hosts in a group
 server group <h> <g> set a host's group
-server ungroup <h>  remove a host from its group
+server ungroup <h>   remove a host from its group
 server info <name>  show HostName / User / Port / keys for one server
 server add          add a new server (guided, validates + previews)
 server rm <name>    remove a server (preview + confirm + backup)
@@ -53,8 +57,10 @@ server hatta        # 5 matches → numbered picker
 server -            # reconnect to whatever you used last
 server search 40.17 # find by IP/hostname/user, not just alias
 server ping IGL-Prod # is it up? (TCP probe, no deps)
-server tag IGL-Prod prod   # tag a host
-server group IGL-Prod prod # set a host's group
+server tag IGL-Prod prod   # tag a host (short form)
+server group IGL-Prod prod # set a host's group (short form)
+server tag           # interactive: pick/create tag → pick host
+server group         # interactive: pick/create group → pick host
 server ungroup IGL-Prod  # remove a host from its group
 server @prod        # list hosts tagged prod
 server @group:prod  # list hosts in group prod

@@ -7,6 +7,8 @@
 #   server list        list servers (alias + user@host:port)
 #   server search <t>  search aliases, hostnames and users
 #   server ping <name> TCP reachability probe
+#   server tag         interactive: pick/create a tag, then pick a host
+#   server group       interactive: pick/create a group, then pick a host
 #   server @<tag>      list hosts with a tag
 #   server @group:<g>  list hosts in a group
 #   server tags        list all tags
@@ -409,6 +411,47 @@ pick() {
   return 1
 }
 
+# Pick an existing name from a list, or type a new one.
+# $1 = label for the list header, $2 = newline-joined existing names.
+# Prints the chosen name on stdout; returns 1 on abort/invalid.
+pick_or_create() {
+  local label="$1" names="$2"
+  local -a options
+  local name i choice
+  while read -r name; do
+    if [[ -n "$name" ]]; then options+=("$name"); fi
+  done <<< "$names"
+
+  if (( ${#options[@]} > 0 )); then
+    echo "$label:" >&2
+    for ((i = 0; i < ${#options[@]}; i++)); do
+      printf '  [%d] %s\n' "$((i + 1))" "${options[i]}" >&2
+    done
+    read -r -p "Pick one (1-${#options[@]}), or type a new name: " choice || { echo; return 1; }
+  else
+    read -r -p 'New name: ' choice || { echo; return 1; }
+  fi
+
+  if [[ "$choice" =~ ^[0-9]+$ ]]; then
+    if (( choice >= 1 && choice <= ${#options[@]} )); then
+      echo "${options[choice - 1]}"
+      return 0
+    fi
+    echo "Invalid choice: $choice" >&2
+    return 1
+  fi
+  if [[ -z "$choice" ]]; then
+    echo 'Aborted.' >&2
+    return 1
+  fi
+  if [[ "$choice" =~ [[:space:],|] ]]; then
+    echo "Invalid name: '$choice' (no spaces, commas or |)" >&2
+    return 1
+  fi
+  echo "$choice"
+  return 0
+}
+
 # ── commands ───────────────────────────────────────────────────────
 
 # Default command: resolve PATTERN to one host, then exec ssh.
@@ -542,6 +585,30 @@ cmd_ungroup() {
   [[ -n "$host" ]] || { echo 'Usage: server ungroup <host>' >&2; return 2; }
   require_host "$host" || return 1
   mutate_config "$host" cleargroup '' "Removed '$host' from its group."
+}
+
+# Interactive: pick/create a tag, then pick a host, then add the tag.
+cmd_tag_interactive() {
+  [[ -r "$CONFIG" ]] || { echo "No servers in $CONFIG" >&2; return 1; }
+  load_hosts
+  (( ${#HOSTS[@]} > 0 )) || { echo "No servers in $CONFIG" >&2; return 1; }
+  local tags_out tag_name picked
+  tags_out="$(LC_ALL=C awk "$AWK_TAGS" "$CONFIG" 2>/dev/null | sort | cut -f1)" || true
+  tag_name="$(pick_or_create 'Tags' "$tags_out")" || return 1
+  picked="$(pick "${HOSTS[@]}")" || return 1
+  mutate_config "$picked" addtag "$tag_name" "Tagged '$picked' with '$tag_name'."
+}
+
+# Interactive: pick/create a group, then pick a host, then assign it.
+cmd_group_interactive() {
+  [[ -r "$CONFIG" ]] || { echo "No servers in $CONFIG" >&2; return 1; }
+  load_hosts
+  (( ${#HOSTS[@]} > 0 )) || { echo "No servers in $CONFIG" >&2; return 1; }
+  local groups_out group_name picked
+  groups_out="$(LC_ALL=C awk "$AWK_GROUPS" "$CONFIG" 2>/dev/null | sort | cut -f1)" || true
+  group_name="$(pick_or_create 'Groups' "$groups_out")" || return 1
+  picked="$(pick "${HOSTS[@]}")" || return 1
+  mutate_config "$picked" setgroup "$group_name" "Set group '$group_name' for '$picked'."
 }
 
 cmd_last() {
@@ -750,10 +817,14 @@ USAGE
   server @group:<g>   list hosts in a group
   server tags         list all tags
   server groups       list all groups
-  server tag <h> <t>  add a tag to a host
+  server tag           interactive: pick/create a tag, then pick a host
+  server tag <tag>     list hosts with a tag
+  server tag <h> <t>   add a tag to a host
   server untag <h> <t> remove a tag from a host
+  server group         interactive: pick/create a group, then pick a host
+  server group <name>  list hosts in a group
   server group <h> <g> set a host's group
-  server ungroup <h>  remove a host from its group
+  server ungroup <h>   remove a host from its group
   server info <name>  show one server's details
   server add          add a new server (guided)
   server rm <name>    remove a server (asks first, keeps a backup)
@@ -785,16 +856,26 @@ main() {
     tags) cmd_tags ;;
     groups) cmd_groups ;;
     tag)
-      (($# >= 2)) || { echo 'Usage: server tag <tag> | server tag <host> <tag>' >&2; return 2; }
-      if (($# >= 3)); then cmd_tag_add "$2" "$3"; else cmd_filter_tag "$2"; fi
+      if (($# >= 3)); then
+        cmd_tag_add "$2" "$3"
+      elif (($# == 2)); then
+        cmd_filter_tag "$2"
+      else
+        cmd_tag_interactive
+      fi
       ;;
     untag)
       (($# >= 3)) || { echo 'Usage: server untag <host> <tag>' >&2; return 2; }
       cmd_untag "$2" "$3"
       ;;
     group)
-      (($# >= 2)) || { echo 'Usage: server group <name> | server group <host> <name>' >&2; return 2; }
-      if (($# >= 3)); then cmd_group_set "$2" "$3"; else cmd_filter_group "$2"; fi
+      if (($# >= 3)); then
+        cmd_group_set "$2" "$3"
+      elif (($# == 2)); then
+        cmd_filter_group "$2"
+      else
+        cmd_group_interactive
+      fi
       ;;
     ungroup)
       (($# >= 2)) || { echo 'Usage: server ungroup <host>' >&2; return 2; }
