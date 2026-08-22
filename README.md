@@ -26,8 +26,9 @@ Uninstall (leaves the project dir intact):
 server [pattern]    connect — exact match wins, else fuzzy, else picker
 server list         list all aliases
 server info <name>  show HostName / User / Port / keys for one server
+server add          add a new server (guided, validates + previews)
 server rm <name>    remove a server (preview + confirm + backup)
-server edit         open ~/.ssh/config in $EDITOR
+server edit [name]  open ~/.ssh/config in $EDITOR (optionally at <name>)
 server help         help
 server version      version
 ```
@@ -38,7 +39,9 @@ Examples:
 server              # pick from all servers
 server IGL-Prod     # exact match → straight in
 server hatta        # 5 matches → numbered picker
+server add          # guided: alias, host, user, port, key
 server rm HattaSky  # shows the block, asks, then removes with backup
+server edit IGL-Prod # open config, cursor at IGL-Prod's block
 ```
 
 Tab-completion: `server <TAB>` lists subcommands + all aliases; `server rm <TAB>` lists aliases.
@@ -68,6 +71,5 @@ bash tests/run.sh    # 28 checks; uses a throwaway config + fake ssh
 
 ## Roadmap
 
-- `server add` — interactive host creation
 - fzf picker when available (falls back to numbered prompt)
 - tags / groups, `server rename`, connect history

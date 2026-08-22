@@ -135,6 +135,21 @@ run 'help prints' 0 "$SERVER" help
 
 run 'edit execs editor with config path' 0 env EDITOR=/bin/echo "$SERVER" edit
 
+# A fake editor named `vim` (line-capable) records its args, so we can
+# assert the +N jump-to-line behavior.
+mkdir -p "$WORK/bin"
+cat > "$WORK/bin/vim" <<EOF
+#!/bin/sh
+echo "\$@" > "$WORK/edit-args.log"
+EOF
+chmod +x "$WORK/bin/vim"
+
+run 'edit <name> exit 0' 0 env PATH="$WORK/bin:$PATH" EDITOR=vim "$SERVER" edit Alpha-One
+want="+$(grep -n '^Host Alpha-One$' "$CONFIG" | cut -d: -f1) $CONFIG"
+assert_eq 'edit jumps to host line' "$(cat "$WORK/edit-args.log")" "$want"
+
+run 'edit unknown exits 1' 1 env EDITOR=/bin/echo "$SERVER" edit nope
+
 # ── rm ─────────────────────────────────────────────────────────────
 
 run_in 'rm confirm' 0 'y' "$SERVER" rm Beta-Two
@@ -149,6 +164,79 @@ run_in 'rm abort keeps config' 1 'n' "$SERVER" rm Alpha-One
 run 'aborted rm left block intact' 0 grep -q 'Alpha-One' "$CONFIG"
 
 run 'rm unknown exits 1' 1 "$SERVER" rm nope
+
+# ── add ─────────────────────────────────────────────────────────────
+
+run_in 'add full block' 0 'Gamma-Three
+10.0.0.9
+deploy
+2200
+~/keys/gamma.pem
+y' "$SERVER" add
+run 'add wrote Host line' 0 grep -q '^Host Gamma-Three$' "$CONFIG"
+run 'add wrote hostname' 0 grep -q '^  HostName 10.0.0.9$' "$CONFIG"
+run 'add wrote user' 0 grep -q '^  User deploy$' "$CONFIG"
+run 'add wrote port' 0 grep -q '^  Port 2200$' "$CONFIG"
+run 'add expanded tilde in key' 0 grep -q "^  IdentityFile $HOME/keys/gamma.pem$" "$CONFIG"
+
+run_in 'add minimal (only required)' 0 'Delta-Four
+10.0.0.8
+
+
+
+y' "$SERVER" add
+run 'minimal add wrote hostname' 0 grep -q '^  HostName 10.0.0.8$' "$CONFIG"
+run 'minimal add has no User line' 1 sed -n '/^Host Delta-Four$/,/^$/p' "$CONFIG" | grep -q 'User'
+
+run_in 'add rejects duplicate alias then succeeds' 0 'Alpha-One
+Fresh-Host
+10.0.0.5
+
+
+
+y' "$SERVER" add
+run 'duplicate alias not re-added' 0 sh -c "test \$(grep -c '^Host Alpha-One$' '$CONFIG') -eq 1"
+run 'fresh host added after retry' 0 grep -q '^Host Fresh-Host$' "$CONFIG"
+
+run_in 'add rejects invalid alias then succeeds' 0 'has space
+OK-Alias
+10.0.0.6
+
+
+
+y' "$SERVER" add
+run 'invalid alias not written' 1 grep -q 'has space' "$CONFIG"
+run 'valid alias written' 0 grep -q '^Host OK-Alias$' "$CONFIG"
+
+run_in 'add rejects non-numeric port then succeeds' 0 'Fxp-Seven
+10.0.0.77
+
+abc
+2200
+
+y' "$SERVER" add
+run 'port validated' 0 grep -q '^  Port 2200$' "$CONFIG"
+run 'bad port not written' 1 grep -q 'abc' "$CONFIG"
+
+run_in 'add abort at confirm' 1 'Zed-Nine
+10.9.9.9
+
+
+
+n' "$SERVER" add
+run 'aborted add not written' 1 grep -q 'Zed-Nine' "$CONFIG"
+
+# Regression: `add` on a brand-new (nonexistent) config — empty HOSTS
+# array must not trip `set -u` on bash 3.2.
+FRESH="$WORK/fresh-config"
+run_in 'add creates fresh config' 0 'Brand-New
+10.1.1.1
+root
+
+
+y' env SERVER_SSH_CONFIG="$FRESH" "$SERVER" add
+run 'fresh config has Host line' 0 grep -q '^Host Brand-New$' "$FRESH"
+run 'fresh config perms 600' 0 sh -c "test \$(stat -f '%Lp' '$FRESH') = 600"
 
 # ── summary ────────────────────────────────────────────────────────
 

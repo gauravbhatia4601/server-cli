@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-readonly VERSION='0.1.0'
+readonly VERSION='0.2.0'
 readonly CONFIG="${SERVER_SSH_CONFIG:-${SSH_CONFIG:-$HOME/.ssh/config}}"
 readonly SSH_BIN="${SERVER_SSH:-ssh}"
 
@@ -113,13 +113,13 @@ find_matches() {
   local pattern="$1"
   MATCHES=()
   if [[ -z "$pattern" ]]; then
-    MATCHES=("${HOSTS[@]}")
+    MATCHES=("${HOSTS[@]+"${HOSTS[@]}"}")
     return 0
   fi
   local found
-  found="$(printf '%s\n' "${HOSTS[@]}" | LC_ALL=C grep -Fix -- "$pattern" 2>/dev/null)" || true
+  found="$(printf '%s\n' "${HOSTS[@]+"${HOSTS[@]}"}" | LC_ALL=C grep -Fix -- "$pattern" 2>/dev/null)" || true
   if [[ -z "$found" ]]; then
-    found="$(printf '%s\n' "${HOSTS[@]}" | LC_ALL=C grep -Fi -- "$pattern" 2>/dev/null)" || true
+    found="$(printf '%s\n' "${HOSTS[@]+"${HOSTS[@]}"}" | LC_ALL=C grep -Fi -- "$pattern" 2>/dev/null)" || true
   fi
   set -f
   MATCHES=($found)
@@ -216,7 +216,7 @@ cmd_rm() {
 
   # Aliases are case-sensitive in ssh — require an exact match.
   local exact tmp
-  exact="$(printf '%s\n' "${HOSTS[@]}" | LC_ALL=C grep -Fx -- "$target")" || {
+  exact="$(printf '%s\n' "${HOSTS[@]+"${HOSTS[@]}"}" | LC_ALL=C grep -Fx -- "$target")" || {
     echo "No server named '$target'." >&2
     return 1
   }
@@ -242,9 +242,119 @@ cmd_rm() {
   echo "Removed. Backup saved at $CONFIG.server.bak"
 }
 
+cmd_add() {
+  load_hosts
+  echo "Adding a server to ${C_BOLD}${CONFIG}${C_RESET}" >&2
+  local alias_name hostname user port key ans
+
+  # Alias: required, unique among existing aliases.
+  while :; do
+    read -r -p 'Alias name: ' alias_name || { echo; return 1; }
+    if [[ ! "$alias_name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+      echo '  invalid alias: use letters, digits, ".", "_" or "-"; no spaces' >&2
+      continue
+    fi
+    if printf '%s\n' "${HOSTS[@]+"${HOSTS[@]}"}" | LC_ALL=C grep -Fxq -- "$alias_name"; then
+      echo "  '$alias_name' already exists ('server edit' to change it)" >&2
+      continue
+    fi
+    break
+  done
+
+  # HostName/IP: required, no whitespace.
+  while :; do
+    read -r -p 'HostName or IP: ' hostname || { echo; return 1; }
+    if [[ -z "$hostname" ]]; then
+      echo '  HostName is required' >&2
+      continue
+    fi
+    if [[ "$hostname" =~ [[:space:]] ]]; then
+      echo '  HostName cannot contain spaces' >&2
+      continue
+    fi
+    break
+  done
+
+  read -r -p 'User (blank to skip): ' user || { echo; return 1; }
+
+  while :; do
+    read -r -p 'Port (blank to skip): ' port || { echo; return 1; }
+    if [[ -z "$port" || "$port" =~ ^[0-9]+$ ]]; then
+      break
+    fi
+    echo '  Port must be a number' >&2
+  done
+
+  read -r -p 'IdentityFile path (blank to skip): ' key || { echo; return 1; }
+  if [[ -n "$key" ]]; then
+    key="${key/#\~/$HOME}"   # expand a leading ~
+    [[ -r "$key" ]] || echo "  warning: '$key' is not readable (saving anyway)" >&2
+  fi
+
+  # Preview + confirm.
+  {
+    echo ''
+    echo "Host $alias_name"
+    echo "  HostName $hostname"
+    if [[ -n "$user" ]]; then echo "  User $user"; fi
+    if [[ -n "$port" ]]; then echo "  Port $port"; fi
+    if [[ -n "$key" ]]; then echo "  IdentityFile $key"; fi
+  } | sed 's/^/  /' >&2
+
+  read -r -p 'Save? [y/N] ' ans || { echo; return 1; }
+  case "$ans" in
+    y | Y) ;;
+    *) echo 'Aborted.' >&2; return 1 ;;
+  esac
+
+  # Backup, then append (ensure the file exists and ends with a newline).
+  [[ -f "$CONFIG" ]] && cp "$CONFIG" "$CONFIG.server.bak"
+  if [[ ! -f "$CONFIG" ]]; then
+    mkdir -p "${CONFIG%/*}" 2>/dev/null || true
+    : > "$CONFIG"
+    chmod 600 "$CONFIG"
+  elif [[ -s "$CONFIG" && -n "$(tail -c 1 "$CONFIG")" ]]; then
+    printf '\n' >> "$CONFIG"
+  fi
+  {
+    printf '\nHost %s\n  HostName %s\n' "$alias_name" "$hostname"
+    if [[ -n "$user" ]]; then printf '  User %s\n' "$user"; fi
+    if [[ -n "$port" ]]; then printf '  Port %s\n' "$port"; fi
+    if [[ -n "$key" ]]; then printf '  IdentityFile %s\n' "$key"; fi
+  } >> "$CONFIG"
+
+  echo "Added: $alias_name → $hostname" >&2
+}
+
 cmd_edit() {
-  local editor="${VISUAL:-${EDITOR:-vi}}"
-  exec "$editor" "$CONFIG"
+  local target="${1:-}" editor_str line
+  editor_str="${VISUAL:-${EDITOR:-vi}}"
+  local -a ed
+  set -f
+  ed=($editor_str)
+  set +f
+  ((${#ed[@]} > 0)) || ed=(vi)
+
+  if [[ -n "$target" ]]; then
+    load_hosts
+    # Locate the Host line so line-capable editors can jump straight to it.
+    line="$(LC_ALL=C awk -v t="$target" '
+      /^[[:space:]]*Host[[:space:]]/ {
+        for (i = 2; i <= NF; i++)
+          if ($i == t) { print NR; found = 1 }
+      }
+      END { if (!found) exit 1 }
+    ' "$CONFIG" 2>/dev/null)" || {
+      echo "No server named '$target'." >&2
+      return 1
+    }
+    case "${ed[0]##*/}" in
+      vi | vim | nvim | nano | emacs | emacsclient | less | more) ed+=("+$line") ;;
+    esac
+  fi
+
+  ed+=("$CONFIG")
+  exec "${ed[@]}"
 }
 
 usage() {
@@ -255,8 +365,9 @@ USAGE
   server [pattern]    connect; fuzzy match, picker when several match
   server list         list all server aliases
   server info <name>  show one server's details
+  server add          add a new server (guided)
   server rm <name>    remove a server (asks first, keeps a backup)
-  server edit         open ~/.ssh/config in $EDITOR
+  server edit [name]  open ~/.ssh/config in $EDITOR, optionally at <name>
   server help         show this help
   server version      show version
 
@@ -279,7 +390,14 @@ main() {
       (($# >= 2)) || { echo 'Usage: server rm <name>' >&2; return 2; }
       cmd_rm "$2"
       ;;
-    edit) cmd_edit ;;
+    add) cmd_add ;;
+    edit)
+      if (($# >= 2)); then
+        cmd_edit "$2"
+      else
+        cmd_edit
+      fi
+      ;;
     help | -h | --help) usage ;;
     version | --version) echo "server $VERSION" ;;
     *)
