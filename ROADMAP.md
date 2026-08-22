@@ -13,10 +13,11 @@ or `purple` for those.
 - [x] `server -` — reconnect to the last-used server
 - [x] `server ping <name>` — TCP reachability probe (`/dev/tcp`, no deps)
 
-## v0.4 — Organization
+## v0.4 — Organization (in progress)
 
-- [ ] Tags via comments (`# @tags: prod,web`) → `server @prod`
-- [ ] Favorites / pinning
+- [x] Tags via comments (`# @tags: prod,web`) → `server @prod`
+- [x] Groups via comments (`# @group: name`) → `server @group:name`
+- [x] `server tag` / `server untag` / `server group` (add/remove/set)
 - [ ] `server rename <old> <new>`
 - [ ] `server copy <name>` (duplicate a host block)
 

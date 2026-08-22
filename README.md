@@ -25,9 +25,16 @@ Uninstall (leaves the project dir intact):
 ```
 server [pattern]    connect — exact match wins, else fuzzy, else picker
 server -            reconnect to the last-used server
-server list         list servers (alias + user@host:port)
+server list         list servers (alias + user@host:port + tags/group)
 server search <t>   search aliases, hostnames and users
 server ping <name>  TCP reachability probe
+server @<tag>       list hosts with a tag
+server @group:<g>   list hosts in a group
+server tags         list all tags
+server groups       list all groups
+server tag <h> <t>  add a tag to a host
+server untag <h> <t> remove a tag from a host
+server group <h> <g> set a host's group
 server info <name>  show HostName / User / Port / keys for one server
 server add          add a new server (guided, validates + previews)
 server rm <name>    remove a server (preview + confirm + backup)
@@ -45,10 +52,30 @@ server hatta        # 5 matches → numbered picker
 server -            # reconnect to whatever you used last
 server search 40.17 # find by IP/hostname/user, not just alias
 server ping IGL-Prod # is it up? (TCP probe, no deps)
+server tag IGL-Prod prod   # tag a host
+server group IGL-Prod prod # set a host's group
+server @prod        # list hosts tagged prod
+server @group:prod  # list hosts in group prod
+server tags         # list all tags
 server add          # guided: alias, host, user, port, key
 server rm HattaSky  # shows the block, asks, then removes with backup
 server edit IGL-Prod # open config, cursor at IGL-Prod's block
 ```
+
+### Tags & groups
+
+Tags and groups live in comments directly above a `Host` block:
+
+```sshconfig
+# @tags: prod, web
+# @group: production
+Host IGL-Prod
+  HostName 40.172.145.167
+  User ubuntu
+```
+
+`server tag <host> <tag>` / `server group <host> <name>` write these for you;
+`server @<tag>` / `server @group:<name>` filter by them.
 
 Tab-completion: `server <TAB>` lists subcommands + all aliases; `server rm <TAB>` lists aliases.
 
@@ -73,7 +100,7 @@ Tab-completion: `server <TAB>` lists subcommands + all aliases; `server rm <TAB>
 ## Tests
 
 ```sh
-bash tests/run.sh    # 59 checks; uses a throwaway config + fake ssh
+bash tests/run.sh    # 99 checks; uses a throwaway config + fake ssh
 ```
 
 ## Roadmap

@@ -17,6 +17,8 @@ readonly LOG="$WORK/ssh-args.log"
 
 cat > "$CONFIG" <<'EOF'
 # fake config for tests
+# @tags: prod, web
+# @group: production
 Host Alpha-One
   HostName 10.0.0.1
   User ubuntu
@@ -287,6 +289,53 @@ NC_PID=$!
 sleep 0.5
 run 'ping reachable host' 0 "$SERVER" ping Local-Test
 kill "$NC_PID" 2>/dev/null
+
+# ── tags & groups ───────────────────────────────────────────────────
+
+"$SERVER" list > "$WORK/list2.out" 2>&1
+run 'list shows tags' 0 grep -qF '[prod, web]' "$WORK/list2.out"
+run 'list shows group' 0 grep -qF '(production)' "$WORK/list2.out"
+
+"$SERVER" @prod > "$WORK/tag.out" 2>&1
+run 'filter by tag' 0 grep -q 'Alpha-One' "$WORK/tag.out"
+run 'filter by tag excludes others' 1 grep -q 'Beta-Two' "$WORK/tag.out"
+
+"$SERVER" tag prod > "$WORK/tag2.out" 2>&1
+run 'tag filter 1-arg form' 0 grep -q 'Alpha-One' "$WORK/tag2.out"
+
+"$SERVER" @group:production > "$WORK/grp.out" 2>&1
+run 'filter by group' 0 grep -q 'Alpha-One' "$WORK/grp.out"
+run 'filter by group excludes others' 1 grep -q 'Beta-Two' "$WORK/grp.out"
+
+"$SERVER" tags > "$WORK/tags.out" 2>&1
+run 'tags list shows prod' 0 grep -q 'prod' "$WORK/tags.out"
+run 'tags list shows web' 0 grep -q 'web' "$WORK/tags.out"
+
+"$SERVER" groups > "$WORK/groups.out" 2>&1
+run 'groups list shows production' 0 grep -q 'production' "$WORK/groups.out"
+
+# mutation
+run 'tag add' 0 "$SERVER" tag Gamma-Three staging
+run 'tag add wrote comment' 0 grep -q '^# @tags: staging$' "$CONFIG"
+run 'tag add idempotent' 0 "$SERVER" tag Gamma-Three staging
+run 'tag not duplicated' 0 sh -c "test \$(grep -c 'staging' '$CONFIG') -eq 1"
+
+run 'untag' 0 "$SERVER" untag Alpha-One web
+run 'untag removed web' 1 grep -q 'web' "$CONFIG"
+run 'untag kept prod' 0 grep -q 'prod' "$CONFIG"
+
+run 'group set' 0 "$SERVER" group Delta-Four staging
+run 'group set wrote comment' 0 grep -q '^# @group: staging$' "$CONFIG"
+
+"$SERVER" @staging > "$WORK/staging.out" 2>&1
+run 'filter by new tag' 0 grep -q 'Gamma-Three' "$WORK/staging.out"
+"$SERVER" @group:staging > "$WORK/staging2.out" 2>&1
+run 'filter by new group' 0 grep -q 'Delta-Four' "$WORK/staging2.out"
+
+run 'tag requires args' 2 "$SERVER" tag
+run 'untag requires args' 2 "$SERVER" untag
+run 'group requires args' 2 "$SERVER" group
+run 'tag unknown host exits 1' 1 "$SERVER" tag nope foo
 
 # ── summary ────────────────────────────────────────────────────────
 
