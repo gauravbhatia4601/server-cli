@@ -24,7 +24,10 @@ Uninstall (leaves the project dir intact):
 
 ```
 server [pattern]    connect — exact match wins, else fuzzy, else picker
-server list         list all aliases
+server -            reconnect to the last-used server
+server list         list servers (alias + user@host:port)
+server search <t>   search aliases, hostnames and users
+server ping <name>  TCP reachability probe
 server info <name>  show HostName / User / Port / keys for one server
 server add          add a new server (guided, validates + previews)
 server rm <name>    remove a server (preview + confirm + backup)
@@ -39,6 +42,9 @@ Examples:
 server              # pick from all servers
 server IGL-Prod     # exact match → straight in
 server hatta        # 5 matches → numbered picker
+server -            # reconnect to whatever you used last
+server search 40.17 # find by IP/hostname/user, not just alias
+server ping IGL-Prod # is it up? (TCP probe, no deps)
 server add          # guided: alias, host, user, port, key
 server rm HattaSky  # shows the block, asks, then removes with backup
 server edit IGL-Prod # open config, cursor at IGL-Prod's block
@@ -62,14 +68,14 @@ Tab-completion: `server <TAB>` lists subcommands + all aliases; `server rm <TAB>
 |---|---|---|
 | `SERVER_SSH_CONFIG` | `~/.ssh/config` | ssh config path |
 | `SERVER_SSH` | `ssh` | ssh binary (used by tests) |
+| `SERVER_STATE_FILE` | `~/.config/server-cli/state` | last-connection state |
 
 ## Tests
 
 ```sh
-bash tests/run.sh    # 28 checks; uses a throwaway config + fake ssh
+bash tests/run.sh    # 59 checks; uses a throwaway config + fake ssh
 ```
 
 ## Roadmap
 
-- fzf picker when available (falls back to numbered prompt)
-- tags / groups, `server rename`, connect history
+See [ROADMAP.md](ROADMAP.md).

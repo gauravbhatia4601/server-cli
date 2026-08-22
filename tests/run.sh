@@ -32,6 +32,10 @@ Host Alpha-Two
 
 Host Dual AliasFoo
   HostName 10.0.0.4
+
+Host Local-Test
+  HostName 127.0.0.1
+  Port 39999
 EOF
 
 cat > "$FAKE_SSH" <<'EOF'
@@ -43,6 +47,7 @@ chmod +x "$FAKE_SSH"
 export SERVER_SSH_CONFIG="$CONFIG"
 export SERVER_SSH="$FAKE_SSH"
 export FAKE_LOG="$LOG"
+export SERVER_STATE_FILE="$WORK/state"
 
 pass=0
 fail=0
@@ -115,18 +120,41 @@ run_in 'picker: invalid choice' 1 '99' "$SERVER"
 
 run 'no match exits 1' 1 "$SERVER" zzz-none
 
+# ── recency (server -) ─────────────────────────────────────────────
+
+"$SERVER" Beta-Two >/dev/null 2>&1
+run 'reconnect via -' 0 "$SERVER" -
+assert_eq 'reconnected to last host' "$(cat "$LOG")" 'Beta-Two'
+run 'no state exits 1' 1 env SERVER_STATE_FILE="$WORK/nonexistent" "$SERVER" -
+
 # ── list / info / version / help ───────────────────────────────────
 
 "$SERVER" list > "$WORK/list.out" 2>&1
 run 'list exit 0' 0 true
 run 'list shows Beta-Two' 0 grep -q 'Beta-Two' "$WORK/list.out"
-run 'list shows all 5 aliases' 0 sh -c "test \$(grep -c '^  ' '$WORK/list.out') -eq 5"
+run 'list shows all 6 aliases' 0 sh -c "test \$(grep -c '^  ' '$WORK/list.out') -eq 6"
+run 'list shows hostname' 0 grep -q '10.0.0.2' "$WORK/list.out"
+run 'list shows user@host:port' 0 grep -q 'root@10.0.0.2:2222' "$WORK/list.out"
 
 "$SERVER" info Beta-Two > "$WORK/info.out" 2>&1
 run 'info exit 0' 0 true
 run 'info shows hostname' 0 grep -q '10.0.0.2' "$WORK/info.out"
 run 'info shows user' 0 grep -q 'root' "$WORK/info.out"
 run 'info unknown exits 1' 1 "$SERVER" info nope
+
+# ── search ─────────────────────────────────────────────────────────
+
+"$SERVER" search 10.0.0 > "$WORK/search.out" 2>&1
+run 'search exit 0' 0 true
+run 'search matches hostname' 0 grep -q 'Alpha-One' "$WORK/search.out"
+run 'search matches user' 0 grep -q 'Beta-Two' "$WORK/search.out"
+
+"$SERVER" search root > "$WORK/search2.out" 2>&1
+run 'search by user' 0 grep -q 'Beta-Two' "$WORK/search2.out"
+run 'search by user excludes others' 1 grep -q 'Alpha-One' "$WORK/search2.out"
+
+run 'search no match exits 1' 1 "$SERVER" search zzz-none
+run 'search requires term' 2 "$SERVER" search
 
 run 'version prints' 0 "$SERVER" version
 run 'help prints' 0 "$SERVER" help
@@ -247,6 +275,18 @@ root
 y' env SERVER_SSH_CONFIG="$FRESH" "$SERVER" add
 run 'fresh config has Host line' 0 grep -q '^Host Brand-New$' "$FRESH"
 run 'fresh config perms 600' 0 sh -c "test \$(stat -f '%Lp' '$FRESH') = 600"
+
+# ── ping ────────────────────────────────────────────────────────────
+
+run 'ping requires name' 2 "$SERVER" ping
+run 'ping unknown exits 1' 1 "$SERVER" ping nope
+
+# reachable: spin up a local listener on the Local-Test port
+nc -l 39999 >/dev/null 2>&1 &
+NC_PID=$!
+sleep 0.5
+run 'ping reachable host' 0 "$SERVER" ping Local-Test
+kill "$NC_PID" 2>/dev/null
 
 # ── summary ────────────────────────────────────────────────────────
 
