@@ -332,6 +332,10 @@ run 'filter by new tag' 0 grep -q 'Gamma-Three' "$WORK/staging.out"
 "$SERVER" @group:staging > "$WORK/staging2.out" 2>&1
 run 'filter by new group' 0 grep -q 'Delta-Four' "$WORK/staging2.out"
 
+run 'ungroup' 0 "$SERVER" ungroup Delta-Four
+run 'ungroup removed comment' 1 grep -q '^# @group: staging$' "$CONFIG"
+run 'ungroup requires args' 2 "$SERVER" ungroup
+
 run 'tag requires args' 2 "$SERVER" tag
 run 'untag requires args' 2 "$SERVER" untag
 run 'group requires args' 2 "$SERVER" group

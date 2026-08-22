@@ -4,7 +4,7 @@
 
 _server() {
   local -a cmds hosts
-  cmds=(add list search tags groups tag untag group ping check info rm edit help version pick)
+  cmds=(add list search tags groups tag untag group ungroup ping check info rm edit help version pick)
   hosts=("${(@f)$(awk '/^[[:space:]]*Host[[:space:]]/ { for (i=2; i<=NF; i++) if ($i !~ /^[!*]/) print $i }' "${SERVER_SSH_CONFIG:-$HOME/.ssh/config}" 2>/dev/null)}")
   hosts=("${(@)hosts:#}")  # drop empty entry from empty cmd-subst
 

@@ -14,6 +14,7 @@
 #   server tag <h> <t> add a tag to a host
 #   server untag <h> <t> remove a tag from a host
 #   server group <h> <g> set a host's group
+#   server ungroup <h>  remove a host from its group
 #   server info <name> show one server's details
 #   server rm <name>   remove a server (interactive, with backup)
 #   server edit        open ~/.ssh/config in your editor
@@ -149,6 +150,14 @@ BEGIN { target = t; action = a; value = v }
           }
         }
         if (!found) buf[nbuf++] = "# @group: " value
+      } else if (action == "cleargroup") {
+        for (i = 0; i < nbuf; i++) {
+          if (buf[i] ~ /^[[:space:]]*#[[:space:]]*@group:/) {
+            for (j = i; j < nbuf - 1; j++) buf[j] = buf[j + 1]
+            nbuf--
+            break
+          }
+        }
       }
     }
   }
@@ -528,6 +537,13 @@ cmd_group_set() {
   mutate_config "$host" setgroup "$name" "Set group '$name' for '$host'."
 }
 
+cmd_ungroup() {
+  local host="${1:-}"
+  [[ -n "$host" ]] || { echo 'Usage: server ungroup <host>' >&2; return 2; }
+  require_host "$host" || return 1
+  mutate_config "$host" cleargroup '' "Removed '$host' from its group."
+}
+
 cmd_last() {
   local last
   [[ -r "$STATE_FILE" ]] || { echo 'No previous connection.' >&2; return 1; }
@@ -737,6 +753,7 @@ USAGE
   server tag <h> <t>  add a tag to a host
   server untag <h> <t> remove a tag from a host
   server group <h> <g> set a host's group
+  server ungroup <h>  remove a host from its group
   server info <name>  show one server's details
   server add          add a new server (guided)
   server rm <name>    remove a server (asks first, keeps a backup)
@@ -778,6 +795,10 @@ main() {
     group)
       (($# >= 2)) || { echo 'Usage: server group <name> | server group <host> <name>' >&2; return 2; }
       if (($# >= 3)); then cmd_group_set "$2" "$3"; else cmd_filter_group "$2"; fi
+      ;;
+    ungroup)
+      (($# >= 2)) || { echo 'Usage: server ungroup <host>' >&2; return 2; }
+      cmd_ungroup "$2"
       ;;
     @*)
       if [[ "$cmd" == @group:* ]]; then
